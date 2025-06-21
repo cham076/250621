@@ -35,13 +35,22 @@ def load_price_data():
             ticker_data = yf.download(symbol, start=start_date, end=end_date)
             if not ticker_data.empty:
                 data[name] = ticker_data['Close']
+            else:
+                st.warning(f"❗ {name} ({symbol})의 주가 데이터가 없습니다.")
         except Exception as e:
-            st.warning(f"{name} 데이터 로딩 실패: {e}")
+            st.error(f"❌ {name} 데이터 로딩 실패: {e}")
+    if not data:
+        return None
     return pd.DataFrame(data)
 
 # 데이터 로딩
 st.info("📡 주가 데이터를 로딩 중입니다...")
 df_prices = load_price_data()
+
+# 데이터 없을 경우 앱 종료
+if df_prices is None or df_prices.empty:
+    st.error("📉 주가 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.")
+    st.stop()
 
 # 주가 그래프 시각화
 st.subheader("📊 주가 변화 라인 차트 (단위: USD 또는 현지통화)")
