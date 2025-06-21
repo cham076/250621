@@ -1,71 +1,73 @@
 import streamlit as st
-import requests
 import pandas as pd
-import plotly.express as px
+import requests
+from bs4 import BeautifulSoup
 import datetime
+import plotly.express as px
 
-# 페이지 기본 설정
-st.set_page_config(page_title="🏆 2025 KBO 주간 순위 변화", layout="wide")
-st.title("📈 2025 KBO 리그 주간별 순위 애니메이션")
+# 🌍 페이지 설정
+st.set_page_config(page_title="🏟️ 2025 KBO 주간 순위 변화", layout="wide")
+st.title("📊 2025 KBO 리그 주간 순위 변화 애니메이션")
 
-# 주간 날짜 리스트 (개막일부터 매주)
-start_date = datetime.date(2025, 3, 22)  # KBO 2025 개막일 기준
+# 📅 주차 리스트 생성 (매주 일요일 기준)
+start_date = datetime.date(2025, 3, 23)  # 3월 22일 개막일 다음날
 end_date = datetime.date.today()
-weeks = pd.date_range(start=start_date, end=end_date, freq='7D').to_pydatetime().tolist()
+week_dates = pd.date_range(start=start_date, end=end_date, freq='7D')
 
-# 공식 JSON API로 주간 순위 가져오기
-def fetch_rank_snapshot(date: datetime.date):
-    url = "https://www.koreabaseball.com/ws/TeamRank/GameRankList.json"
-    params = {
-        "gameDate": date.strftime("%Y%m%d"),
-        "kind": "0"  # 0 = 정규 시즌 순위
-    }
-    resp = requests.get(url, params=params)
-    resp.raise_for_status()
-    records = resp.json().get("teamRank", [])
-    return [
-        {"week": date, "team": rec["teamFullName"], "rank": int(rec["rank"])}
-        for rec in records
-    ]
+# 📥 주차별 순위 스크래핑 함수
+@st.cache_data(show_spinner=True)
+def fetch_weekly_standings(week_dates):
+    all_data = []
+    for date in week_dates:
+        date_str = date.strftime("%Y-%m-%d")
+        url = f"https://www.koreabaseball.com/Record/TeamRank/TeamRankDaily.aspx?date={date_str}"
+        try:
+            res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+            soup = BeautifulSoup(res.text, "html.parser")
+            table = soup.find("table", class_="tData")
+            if not table:
+                continue
+            rows = table.select("tbody tr")
+            for row in rows:
+                cols = row.find_all("td")
+                if len(cols) < 2:
+                    continue
+                team = cols[0].text.strip()
+                rank = int(cols[1].text.strip())
+                all_data.append({
+                    "week": date,
+                    "team": team,
+                    "rank": rank
+                })
+        except Exception as e:
+            st.warning(f"{date_str} 순위 불러오기 실패: {e}")
+    return pd.DataFrame(all_data)
 
-# 모든 주차 데이터 수집
-all_data = []
-for wd in weeks:
-    try:
-        recs = fetch_rank_snapshot(wd.date())
-        if recs:
-            all_data.extend(recs)
-            st.write(f"✅ {wd.date()} 주차 데이터 로드 성공")
-        else:
-            st.write(f"⚠️ {wd.date()} 주차 순위 데이터 없음")
-    except Exception as e:
-        st.warning(f"❌ {wd.date()} 주차 로드 실패: {e}")
+# 🔄 데이터 수집
+df = fetch_weekly_standings(week_dates)
 
-# DataFrame 변환 및 검증
-df = pd.DataFrame(all_data)
+# 📉 데이터 시각화
 if df.empty:
-    st.error("📭 순위 데이터를 하나도 불러오지 못했습니다.")
-    st.stop()
+    st.error("❌ 데이터를 불러올 수 없습니다. 사이트 구조가 변경되었을 수 있습니다.")
+else:
+    # 🌀 애니메이션 그래프 생성
+    fig = px.line(
+        df,
+        x="team",
+        y="rank",
+        color="team",
+        animation_frame=df["week"].dt.strftime("%Y-%m-%d"),
+        range_y=[10.5, 0.5],
+        labels={"rank": "순위", "team": "팀"},
+        title="🏆 2025 KBO 주간 순위 변화"
+    )
+    fig.update_yaxes(autorange="reversed")
+    fig.update_layout(height=600)
+    st.plotly_chart(fig, use_container_width=True)
 
-# Plotly 애니메이션 라인 차트
-fig = px.line(
-    df,
-    x="team",
-    y="rank",
-    color="team",
-    animation_frame=df['week'].dt.strftime('%Y-%m-%d'),
-    range_y=[10.5, 0.5],
-    title="2025 KBO 리그 🧢 주간 순위 변화 애니메이션",
-    labels={"rank": "순위 (1 = 최고)", "team": "팀"}
-)
-fig.update_yaxes(autorange="reversed")  # 1위가 위에 표시되도록 반전
-fig.update_layout(height=600, legend_title_text='구단명')
-
-st.plotly_chart(fig, use_container_width=True)
-
-# 주차 슬라이더 및 테이블 UI
-week_strs = sorted(df['week'].dt.strftime('%Y-%m-%d').unique())
-selected_week = st.select_slider("🔢 특정 주차 선택", options=week_strs)
-sub = df[df['week'].dt.strftime('%Y-%m-%d') == selected_week].sort_values("rank").reset_index(drop=True)
-st.write(f"### 📅 {selected_week} 주차 순위표")
-st.table(sub)
+    # 📋 주차별 테이블 보기
+    week_strs = sorted(df["week"].dt.strftime("%Y-%m-%d").unique())
+    selected = st.select_slider("📅 주차를 선택하세요", options=week_strs)
+    st.subheader(f"📋 {selected} 기준 순위표")
+    selected_df = df[df["week"].dt.strftime("%Y-%m-%d") == selected].sort_values("rank")
+    st.table(selected_df.reset_index(drop=True))
