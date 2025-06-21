@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import pydeck as pdk
+import plotly.express as px
 
 # 데이터 불러오기
 @st.cache_data
@@ -10,8 +11,7 @@ def load_data():
 
 df = load_data()
 
-# 좌표 데이터 불러오기 (서울 시군구 중심 위도/경도, 필요시 전국으로 확장 가능)
-# 여기선 서울 시군구 예시 (수동 설정 또는 geopy로 자동화 가능)
+# 서울 시군구 위경도 (전국 확장 필요 시 geopy 추천)
 locations = {
     "종로구": [37.573050, 126.979189],
     "중구": [37.563750, 126.997559],
@@ -42,26 +42,30 @@ locations = {
 
 # 사용자 선택: 연도
 years = df["연도"].unique()
-selected_year = st.selectbox("연도 선택", sorted(years, reverse=True))
+selected_year = st.selectbox("📅 연도 선택", sorted(years, reverse=True))
 df_year = df[df["연도"] == selected_year].copy()
 
-# 좌표 추가
+# 평균 진학률 표시
+avg_rate = round(df_year["진학률"].mean(), 1)
+st.metric(label=f"{selected_year}년 전국 평균 진학률", value=f"{avg_rate} %")
+
+# 지도에 표시할 위도/경도 추가
 df_year["위도"] = df_year["시군구"].map(lambda x: locations.get(x, [None, None])[0])
 df_year["경도"] = df_year["시군구"].map(lambda x: locations.get(x, [None, None])[1])
-df_year = df_year.dropna(subset=["위도", "경도"])
+df_map = df_year.dropna(subset=["위도", "경도"])
 
-# 알파값(진학률 시각화용)
-max_rate = df_year["진학률"].max()
-df_year["alpha"] = (df_year["진학률"] / max_rate * 255).clip(50, 255).astype(int)
+# 진학률에 따른 색 투명도 조정
+max_rate = df_map["진학률"].max()
+df_map["alpha"] = (df_map["진학률"] / max_rate * 255).clip(50, 255).astype(int)
 
 # 지도 시각화
 st.subheader("🗺️ 시군구별 대학 진학률 지도")
 
 layer = pdk.Layer(
     "ScatterplotLayer",
-    data=df_year,
+    data=df_map,
     get_position='[경도, 위도]',
-    get_fill_color='[30, 144, 255, alpha]',  # 파란색 계열
+    get_fill_color='[30, 144, 255, alpha]',
     get_radius=8000,
     pickable=True
 )
@@ -74,8 +78,27 @@ view_state = pdk.ViewState(
 )
 
 st.pydeck_chart(pdk.Deck(
-    map_style=None,  # ✅ API 없이 지도 사용
+    map_style=None,
     initial_view_state=view_state,
     layers=[layer],
     tooltip={"text": "{시군구}\n진학률: {진학률}%"}
 ))
+
+# 📊 시도별 평균 진학률 바 그래프
+st.subheader("📊 시도별 평균 진학률 비교")
+
+df_avg_by_region = df[df["연도"] == selected_year].groupby("시도")["진학률"].mean().reset_index()
+df_avg_by_region = df_avg_by_region.sort_values("진학률", ascending=False)
+
+fig = px.bar(
+    df_avg_by_region,
+    x="시도", y="진학률", text="진학률",
+    labels={"시도": "시도", "진학률": "평균 진학률 (%)"},
+    color="진학률", color_continuous_scale="Blues",
+    title=f"{selected_year}년 시도별 평균 진학률"
+)
+
+fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+fig.update_layout(yaxis_range=[0, 100], height=500)
+
+st.plotly_chart(fig, use_container_width=True)
