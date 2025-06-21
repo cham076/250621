@@ -24,7 +24,7 @@ yyyymm = selected_date.strftime("%Y%m")
 yyyymmdd = selected_date.strftime("%Y%m%d")
 
 params = {
-    "KEY": 45792ab9f62d44bdb406d69d79e08c37,
+    "KEY": API_KEY,
     "Type": "json",
     "ATPT_OFCDC_SC_CODE": ORG_CODE,
     "SD_SCHUL_CODE": SCHOOL_CODE,
