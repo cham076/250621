@@ -1,62 +1,55 @@
 import streamlit as st
 import requests
+from bs4 import BeautifulSoup
 import datetime
 import random
 
-API_KEY = "45792ab9f62d44bdb406d69d79e08c37"  # 발급받은 키로 교체하세요.
-SCHOOL_CODE = "B000011986"     # 충암고등학교 NEIS 학교 코드
-ORG_CODE = "J10"               # 서울특별시 교육청 코드
-
-st.set_page_config(page_title="🍽️ 충암고 급식 앱", layout="centered")
+st.set_page_config(page_title="🍱 충암고 급식앱", layout="centered")
 
 st.markdown("""
-<h1 style="text-align:center;color:#FF6347;">🍱 충암고등학교 급식 보기</h1>
-<p style="text-align:center;font-size:18px;">날짜를 선택해서 오늘의 급식을 확인해보세요!</p>
+<h1 style="text-align:center;color:#FF4500;">🌟 충암고등학교 급식 조회</h1>
+<p style="text-align:center;font-size:18px;">날짜를 선택해 오늘의 중식 메뉴를 확인하세요!</p>
 <hr>
 """, unsafe_allow_html=True)
 
-selected_date = st.date_input("📅 급식을 볼 날짜를 선택하세요",
-                              datetime.date.today(),
-                              min_value=datetime.date(2024,1,1),
-                              max_value=datetime.date.today())
+# 날짜 입력
+selected = st.date_input("📅 날짜 선택", datetime.date.today(), min_value=datetime.date(2024,1,1), max_value=datetime.date.today())
 
-yyyymm = selected_date.strftime("%Y%m")
-yyyymmdd = selected_date.strftime("%Y%m%d")
+yyyymm = selected.strftime("%Y%m")
+yyyymmdd = selected.day
 
-params = {
-    "KEY": API_KEY,
-    "Type": "json",
-    "ATPT_OFCDC_SC_CODE": ORG_CODE,
-    "SD_SCHUL_CODE": SCHOOL_CODE,
-    "MLSV_YMD": yyyymmdd
-}
+# 스크래핑용 URL (예: june 2025)
+url = f"https://school.koreacharts.com/school/meals/B000011986/{yyyymm}.html"
+resp = requests.get(url)
+soup = BeautifulSoup(resp.text, "html.parser")
 
-st.markdown(f"### 📌 {selected_date.strftime('%Y년 %m월 %d일')} 급식 메뉴")
+# 메뉴 추출
+rows = soup.select("table tr")
+menu = None
+for r in rows:
+    cols = r.find_all("td")
+    if len(cols)>=3:
+        day = cols[0].get_text(strip=True)
+        if int(day) == yyyymmdd:
+            text = cols[2].get_text(separator="\n", strip=True)
+            menu = text
+            break
 
-resp = requests.get("https://open.neis.go.kr/hub/mealServiceDietInfo", params=params)
-data = resp.json()
-
-if "mealServiceDietInfo" not in data:
+# 결과 표시
+st.markdown(f"### 📌 {selected.strftime('%Y년 %m월 %d일')} 중식 메뉴")
+if not menu:
     st.warning("해당 날짜의 급식 정보가 없습니다.")
 else:
-    info = data["mealServiceDietInfo"][1]["row"][0]
-    dishes = info["DDISH_NM"].split("<br/>")
-    cal = info.get("CAL_INFO", "정보 없음")
-    nutrient = info.get("NTR_INFO", "영양 정보 없음")
-    
-    emoji_review = random.choice([
-        "😋 오늘도 든든! 최고야~",
-        "👍 맛있는 한 끼!",
-        "😊 건강하게 먹어요!",
-        "🙌 균형 잡힌 식사입니다!"
-    ])
-    
+    lines = menu.split("\n")
+    dishes = [l for l in lines if l and not l.startswith("[")]
+    cal = "-"
+    nutri = "-"
+    # 칼로리/영양 정보는 다른 사이트 필요하므로 생략
+
+    emoji = random.choice(["😋 든든해요!", "👍 맛있었어요!", "😊 건강하게!", "💚 영양 만점!"])
     st.markdown("---")
-    for item in dishes:
-        st.markdown(f"- 🍽️ **{item}**")
-    st.markdown(f"\n**🔥 칼로리**: {cal}")
-    st.markdown(f"**🧠 영양**: {nutrient}")
-    st.markdown(f"\n### 💬 한줄 평\n> {emoji_review}")
+    for d in dishes:
+        st.markdown(f"- 🍲 **{d}**")
+    st.markdown(f"\n### 💬 한줄 평: *{emoji}*")
     st.markdown("---")
-    st.markdown('<p style="text-align:center;font-size:14px;">Made with ❤️ by SchoolMealBot</p>',
-                unsafe_allow_html=True)
+    st.markdown('<p style="text-align:center;font-size:14px;">Made with ❤️ by SchoolMealBot</p>', unsafe_allow_html=True)
