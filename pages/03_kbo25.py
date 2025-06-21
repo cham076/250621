@@ -2,14 +2,14 @@ import streamlit as st
 import pandas as pd
 import pydeck as pdk
 import plotly.express as px
-from datetime import datetime, timedelta
+from datetime import datetime
 import random
 
-# 📌 페이지 설정
+# 페이지 설정
 st.set_page_config(page_title="KBO 누적 관중 시각화", layout="wide")
 st.title("⚾ KBO 구단 홈구장 지도 및 누적 관중 시각화")
 
-# 📌 KBO 구단 정보
+# 구단 위치 및 구장 정보
 teams = [
     {"팀": "LG 트윈스", "위도": 37.5125, "경도": 127.0728, "구장": "잠실"},
     {"팀": "두산 베어스", "위도": 37.5125, "경도": 127.0728, "구장": "잠실"},
@@ -24,7 +24,7 @@ teams = [
 ]
 df_stadiums = pd.DataFrame(teams)
 
-# 📌 관중 데이터 생성 (샘플용, 실데이터 교체 가능)
+# 예시용 관중수 데이터 생성
 @st.cache_data
 def create_dummy_attendance_data():
     start = datetime(2024, 3, 23)
@@ -42,10 +42,11 @@ def create_dummy_attendance_data():
 
 df_attendance = create_dummy_attendance_data()
 
-# 📌 날짜 범위 슬라이더
-min_date = df_attendance["날짜"].min()
-max_date = df_attendance["날짜"].max()
+# 날짜 범위 슬라이더용 date 타입으로 변환
+min_date = df_attendance["날짜"].min().date()
+max_date = df_attendance["날짜"].max().date()
 
+# 슬라이더 UI
 date_range = st.slider(
     "📆 날짜 범위 선택",
     min_value=min_date,
@@ -54,12 +55,16 @@ date_range = st.slider(
     format="YYYY-MM-DD"
 )
 
-# 📌 누적 관중 계산
-df_filtered = df_attendance[(df_attendance["날짜"] >= date_range[0]) & (df_attendance["날짜"] <= date_range[1])]
+# 슬라이더 결과값을 datetime으로 변환
+start_date = pd.to_datetime(date_range[0])
+end_date = pd.to_datetime(date_range[1])
+
+# 필터링된 누적 관중
+df_filtered = df_attendance[(df_attendance["날짜"] >= start_date) & (df_attendance["날짜"] <= end_date)]
 df_total_by_team = df_filtered.groupby("팀")["관중수"].sum().reset_index()
 df_total = pd.merge(df_total_by_team, df_stadiums, on="팀")
 
-# 📍 지도 시각화
+# 지도 시각화
 st.subheader("📍 홈구장 위치 지도 (누적 관중 포함)")
 deck_layer = pdk.Layer(
     "ScatterplotLayer",
@@ -84,14 +89,14 @@ st.pydeck_chart(pdk.Deck(
     tooltip={"text": "{팀}\n구장: {구장}\n누적 관중: {관중수}명"}
 ))
 
-# 📊 누적 관중 그래프
+# 그래프 시각화
 st.subheader("📊 누적 관중 수 (선택한 날짜 범위)")
 fig = px.bar(
     df_total.sort_values("관중수", ascending=False),
     x="팀", y="관중수", color="팀",
     text="관중수",
     labels={"관중수": "누적 관중 수", "팀": "구단"},
-    title=f"{date_range[0].strftime('%Y-%m-%d')} ~ {date_range[1].strftime('%Y-%m-%d')} 누적 관중 수"
+    title=f"{start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')} 누적 관중 수"
 )
 
 fig.update_traces(texttemplate='%{text:,}', textposition='outside')
