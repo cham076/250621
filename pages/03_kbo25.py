@@ -9,7 +9,7 @@ import random
 st.set_page_config(page_title="KBO 누적 관중 시각화", layout="wide")
 st.title("⚾ KBO 구단 홈구장 지도 및 누적 관중 시각화")
 
-# 팀 기본 정보
+# 팀 정보
 teams = [
     {"팀": "LG 트윈스", "위도": 37.5125, "경도": 127.0728, "구장": "잠실"},
     {"팀": "두산 베어스", "위도": 37.5125, "경도": 127.0728, "구장": "잠실"},
@@ -24,7 +24,7 @@ teams = [
 ]
 df_stadiums = pd.DataFrame(teams)
 
-# 팀 로고 URL
+# 로고 URL
 team_logos = {
     "LG 트윈스": "https://upload.wikimedia.org/wikipedia/en/2/2f/LG_Twins.png",
     "두산 베어스": "https://upload.wikimedia.org/wikipedia/en/2/24/Doosan_Bears.png",
@@ -38,7 +38,7 @@ team_logos = {
     "키움 히어로즈": "https://upload.wikimedia.org/wikipedia/en/e/e3/Kiwoom_Heroes.png"
 }
 
-# 예시 관중 데이터 생성
+# 가상 관중 데이터 생성
 @st.cache_data
 def create_dummy_attendance_data():
     start = datetime(2024, 3, 23)
@@ -56,7 +56,7 @@ def create_dummy_attendance_data():
 
 df_attendance = create_dummy_attendance_data()
 
-# 날짜 슬라이더
+# 날짜 범위 슬라이더
 min_date = df_attendance["날짜"].min().date()
 max_date = df_attendance["날짜"].max().date()
 
@@ -80,7 +80,7 @@ df_total = pd.merge(df_total_by_team, df_stadiums, on="팀")
 max_audience = df_total["관중수"].max()
 df_total["alpha"] = (df_total["관중수"] / max_audience * 255).clip(60, 255).astype(int)
 
-# 팀 로고 URL 및 IconLayer용 데이터 추가
+# 로고 정보 추가
 df_total["icon_url"] = df_total["팀"].map(team_logos)
 df_total["icon_data"] = df_total.apply(lambda row: {
     "url": row["icon_url"],
@@ -89,8 +89,8 @@ df_total["icon_data"] = df_total.apply(lambda row: {
     "anchorY": 128
 }, axis=1)
 
-# 지도 시각화: Scatterplot + IconLayer
-st.subheader("📍 홈구장 위치 지도 (색 진하기 + 팀 로고)")
+# 지도 시각화
+st.subheader("📍 홈구장 위치 지도 (API 없이 지도 배경 표시)")
 
 scatter_layer = pdk.Layer(
     "ScatterplotLayer",
@@ -119,13 +119,13 @@ view_state = pdk.ViewState(
 )
 
 st.pydeck_chart(pdk.Deck(
-    map_style='mapbox://styles/mapbox/light-v9',
+    map_style=None,  # ✅ API 없이 지도 배경 표시
     initial_view_state=view_state,
     layers=[scatter_layer, icon_layer],
     tooltip={"text": "{팀}\n구장: {구장}\n누적 관중: {관중수}명"}
 ))
 
-# 바 차트
+# 누적 관중 바 차트
 st.subheader("📊 누적 관중 수 (선택한 날짜 범위)")
 fig = px.bar(
     df_total.sort_values("관중수", ascending=False),
@@ -138,7 +138,7 @@ fig.update_traces(texttemplate='%{text:,}', textposition='outside')
 fig.update_layout(height=500)
 st.plotly_chart(fig, use_container_width=True)
 
-# 라인 그래프: 팀별 변화 추이
+# 팀별 관중 변화 추이
 st.subheader("📈 팀별 관중 변화 추이")
 df_line = df_attendance[(df_attendance["날짜"] >= start_date) & (df_attendance["날짜"] <= end_date)]
 df_line = df_line.groupby(["날짜", "팀"])["관중수"].sum().reset_index()
