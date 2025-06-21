@@ -12,7 +12,6 @@ st.markdown("# 📈 글로벌 시가총액 TOP10 기업의 최근 1년 주가 �
 tickers = {
     "Apple": "AAPL",
     "Microsoft": "MSFT",
-    "Saudi Aramco": "2222.SR",   # 사우디 증시 (지연될 수 있음)
     "Alphabet (Google)": "GOOGL",
     "Amazon": "AMZN",
     "Nvidia": "NVDA",
