@@ -4,7 +4,7 @@ import datetime
 import random
 
 API_KEY = "45792ab9f62d44bdb406d69d79e08c37"  # 발급받은 키로 교체하세요.
-SCHOOL_CODE = "B000011986"     # 충암고등학교 NEIS 학교 코드
+SCHOOL_CODE = "B100004436"     # 충암고등학교 NEIS 학교 코드
 ORG_CODE = "J10"               # 서울특별시 교육청 코드
 
 st.set_page_config(page_title="🍽️ 충암고 급식 앱", layout="centered")
