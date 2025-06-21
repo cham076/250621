@@ -103,7 +103,6 @@
 
 # st.plotly_chart(fig, use_container_width=True)
 
-
 import streamlit as st
 import pandas as pd
 import pydeck as pdk
@@ -155,24 +154,34 @@ df_year = df[df["연도"] == selected_year].copy()
 avg_rate = round(df_year["진학률"].mean(), 1)
 st.metric(label=f"{selected_year}년 평균 진학률", value=f"{avg_rate} %")
 
-# 위도/경도 추가
+# 위경도 추가
 df_year["위도"] = df_year["시군구"].map(lambda x: locations.get(x, [None, None])[0])
 df_year["경도"] = df_year["시군구"].map(lambda x: locations.get(x, [None, None])[1])
 df_map = df_year.dropna(subset=["위도", "경도"])
 
-# 진학률 수치를 텍스트로 지도에 표시
+# 수치 텍스트 생성
 df_map["text"] = df_map["진학률"].astype(str) + "%"
+
+# ▶️ 지도 시각화: 위치 + 수치 둘 다 표현
+scatter_layer = pdk.Layer(
+    "ScatterplotLayer",
+    data=df_map,
+    get_position='[경도, 위도]',
+    get_radius=8000,
+    get_fill_color='[30, 144, 255, 160]',
+    pickable=True
+)
 
 text_layer = pdk.Layer(
     "TextLayer",
     data=df_map,
-    pickable=True,
     get_position='[경도, 위도]',
     get_text='text',
     get_size=16,
     get_color=[0, 0, 0],
     get_angle=0,
-    get_alignment_baseline='"bottom"'
+    get_alignment_baseline='"top"',
+    pickable=False
 )
 
 view_state = pdk.ViewState(
@@ -182,12 +191,12 @@ view_state = pdk.ViewState(
     pitch=0
 )
 
-st.subheader("🗺️ 시군구별 대학 진학률 지도 (수치 표시)")
+st.subheader("🗺️ 시군구별 대학 진학률 지도 (위치 + 수치)")
 
 st.pydeck_chart(pdk.Deck(
     map_style=None,
     initial_view_state=view_state,
-    layers=[text_layer],
+    layers=[scatter_layer, text_layer],
     tooltip={"text": "{시군구}\n진학률: {진학률}%"}
 ))
 
@@ -209,3 +218,4 @@ fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
 fig.update_layout(yaxis_range=[0, 100], height=500)
 
 st.plotly_chart(fig, use_container_width=True)
+
